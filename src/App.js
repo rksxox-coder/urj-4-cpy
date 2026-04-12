@@ -273,6 +273,8 @@ function AnalyzerView({ currentUser, onLogout }) {
 
   // ── Batch Analysis Helpers ──────────────────────────────────────────────────
 
+  const getValidUrlCount = (input) => input.split('\n').filter(url => url.trim()).length;
+
   const createBatches = (urls) => {
     const batches = [];
     let i = 0;
@@ -391,11 +393,11 @@ function AnalyzerView({ currentUser, onLogout }) {
       Modal.warning({ title: 'Input Required', content: 'Please enter at least one URL.' });
       return;
     }
-    const URL_LIMIT = currentUser.url_limit;
-    if (urls.length > URL_LIMIT) {
+    const urlLimit = currentUser.url_limit;
+    if (urls.length > urlLimit) {
       Modal.error({
         title: 'URL Limit Exceeded',
-        content: `Your user role ('${currentUser.role}') allows a maximum of ${URL_LIMIT} URLs. You entered ${urls.length}.`,
+        content: `Your user role ('${currentUser.role}') allows a maximum of ${urlLimit} URLs. You entered ${urls.length}.`,
       });
       return;
     }
@@ -550,7 +552,7 @@ function AnalyzerView({ currentUser, onLogout }) {
 
         {/* URL Count Indicator */}
         {(() => {
-          const urlCount = urlsInput.split('\n').filter(url => url.trim()).length;
+          const urlCount = getValidUrlCount(urlsInput);
           const limit = currentUser?.url_limit;
           const isOver = limit && urlCount > limit;
           return urlCount > 0 ? (
