@@ -447,6 +447,31 @@
   transform: none !important;
 }
 
+/* ---------- Batch Analysis Button ---------- */
+.btn-batch {
+  height: 42px !important;
+  padding: 0 24px !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  background: rgba(129, 140, 248, 0.12) !important;
+  border: 1px solid rgba(129, 140, 248, 0.3) !important;
+  color: #818cf8 !important;
+  transition: all 0.25s ease !important;
+  letter-spacing: 0.2px;
+}
+.btn-batch:hover {
+  background: rgba(129, 140, 248, 0.2) !important;
+  border-color: rgba(129, 140, 248, 0.5) !important;
+  color: #a5b4fc !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 16px rgba(129, 140, 248, 0.2) !important;
+}
+.btn-batch:disabled {
+  opacity: 0.5 !important;
+  transform: none !important;
+}
+
 .btn-stop {
   height: 42px !important;
   padding: 0 20px !important;
@@ -547,6 +572,74 @@
 .progress-bar .ant-progress-inner {
   background: rgba(255,255,255,0.04) !important;
   border-radius: 4px !important;
+}
+
+/* ---------- Batch Progress Dashboard ---------- */
+.batch-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.batch-status-text {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #818cf8 !important;
+  margin: 0 !important;
+}
+
+.batch-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.batch-stat {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.batch-stat-label {
+  font-size: 10px;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.batch-stat-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.batch-countdown {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(129, 140, 248, 0.08);
+  border: 1px solid rgba(129, 140, 248, 0.2);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.countdown-number {
+  color: #818cf8;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  margin-left: 2px;
 }
 
 /* ---------- Results Bar ---------- */

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import mermaid from 'mermaid';
-import { Layout, Input, Button, Table, Modal, Space, Select, Typography, Tag, Tooltip, Progress, ConfigProvider, theme, List, Descriptions, Collapse, Avatar, Card } from 'antd';
-import { DownloadOutlined, BarChartOutlined, StopOutlined, RocketOutlined, SaveOutlined, GithubOutlined, LogoutOutlined, LinkOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Layout, Input, Button, Table, Modal, Space, Select, Typography, Tooltip, Progress, ConfigProvider, theme, List, Descriptions, Collapse, Avatar, Card } from 'antd';
+import { DownloadOutlined, BarChartOutlined, StopOutlined, RocketOutlined, SaveOutlined, GithubOutlined, LogoutOutlined, LinkOutlined, ThunderboltOutlined, SyncOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import './App.css';
 
@@ -155,19 +155,23 @@ function AnalyzerView({ currentUser, onLogout }) {
   const [progress, setProgress] = useState(0);
   const [totalUrls, setTotalUrls] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [batchInfo, setBatchInfo] = useState(null);
   const timerRef = useRef(null);
   const socketRef = useRef(null);
+  const batchStopRef = useRef(false);
+  const batchTimestampRef = useRef(null);
 
 
   const generateMermaidMarkup = (details) => {
     let markup = 'graph TD\n';
     const chain = details.redirectChain;
     if (!chain || chain.length === 0) {
-      return `graph TD\n A[\"<b>${details.originalURL}</b><br/>${details.error ? `<span style='color:red'>Error: ${details.error}</span>` : 'No redirects.'}\"];`;
+      return `graph TD\n A["<b>${details.originalURL}</b><br/>${details.error ? `<span style='color:red'>Error: ${details.error}</span>` : 'No redirects.'}"];`;
     }
     chain.forEach((hop, index) => {
         const id = `hop${index}`;
-        const nodeText = `\"<b>${truncate(hop.url, 40)}</b><br/>Status: ${hop.status}<br/>Server: ${hop.server || 'Unknown'}\"`;
+        const nodeText = `"<b>${truncate(hop.url, 40)}</b><br/>Status: ${hop.status}<br/>Server: ${hop.server || 'Unknown'}"`;
         markup += `  ${id}[${nodeText}]`;
         if (index < chain.length - 1) markup += ` --> hop${index + 1};\n`;
     });
@@ -257,7 +261,145 @@ function AnalyzerView({ currentUser, onLogout }) {
     };
   };
   
-  const handleStopAnalysis = () => { if (socketRef.current) socketRef.current.close(); }
+  const handleStopAnalysis = () => {
+    batchStopRef.current = true;
+    if (socketRef.current) socketRef.current.close();
+    if (!isBatchMode) {
+      stopTimer();
+      setIsAnalyzing(false);
+    }
+    // In batch mode, runBatchAnalysis loop detects batchStopRef and cleans up
+  };
+
+  // ── Batch Analysis Helpers ──────────────────────────────────────────────────
+
+  const createBatches = (urls) => {
+    const batches = [];
+    let i = 0;
+    while (i < urls.length) {
+      const remaining = urls.length - i;
+      if (remaining < 45) {
+        batches.push(urls.slice(i));
+        break;
+      }
+      const batchSize = Math.floor(Math.random() * 11) + 45; // 45–55
+      batches.push(urls.slice(i, i + batchSize));
+      i += batchSize;
+    }
+    return batches;
+  };
+
+  const processBatchWebSocket = (batchUrls, onResult) => {
+    return new Promise((resolve) => {
+      const batchResults = [];
+      let resolved = false;
+      const socket = new WebSocket("wss://urj4.onrender.com/analyze");
+      socketRef.current = socket;
+
+      socket.onopen = () => socket.send(JSON.stringify({ urls: batchUrls }));
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.done) {
+          if (!resolved) { resolved = true; resolve({ results: batchResults, stopped: false }); }
+        } else {
+          batchResults.push(data);
+          onResult(batchResults.length);
+        }
+      };
+      socket.onerror = () => {
+        if (!resolved) { resolved = true; resolve({ results: batchResults, stopped: false }); }
+      };
+      socket.onclose = () => {
+        if (!resolved) { resolved = true; resolve({ results: batchResults, stopped: batchStopRef.current }); }
+      };
+    });
+  };
+
+  const runBatchAnalysis = async (batches, totalUrlCount) => {
+    const timestamp = Date.now();
+    batchTimestampRef.current = timestamp;
+    batchStopRef.current = false;
+
+    setIsBatchMode(true);
+    setIsAnalyzing(true);
+    setResults([]);
+    setTotalUrls(totalUrlCount);
+    setProgress(0);
+    startTimer();
+
+    let allResults = [];
+
+    for (let i = 0; i < batches.length; i++) {
+      if (batchStopRef.current) break;
+
+      const batch = batches[i];
+      setBatchInfo({
+        currentBatch: i + 1,
+        totalBatches: batches.length,
+        batchUrls: batch.length,
+        completedInBatch: 0,
+        countdown: null,
+        statusText: `Processing Batch ${i + 1} of ${batches.length}…`,
+      });
+
+      const { results: batchResults } = await processBatchWebSocket(batch, (completed) => {
+        setProgress(p => p + 1);
+        setBatchInfo(prev => prev ? { ...prev, completedInBatch: completed } : prev);
+      });
+
+      // Persist batch to localStorage for crash resilience
+      const batchKey = `batch_${timestamp}_${i + 1}`;
+      localStorage.setItem(batchKey, JSON.stringify(batchResults));
+
+      allResults = [...allResults, ...batchResults];
+
+      if (batchStopRef.current) break;
+
+      // Countdown delay between batches (not after the last batch)
+      if (i < batches.length - 1) {
+        const delaySeconds = Math.floor(Math.random() * 6) + 5; // 5–10 s
+        for (let s = delaySeconds; s > 0; s--) {
+          if (batchStopRef.current) break;
+          setBatchInfo(prev => prev ? {
+            ...prev,
+            countdown: s,
+            statusText: `Waiting ${s}s before Batch ${i + 2}…`,
+          } : prev);
+          await new Promise(res => setTimeout(res, 1000));
+        }
+        if (!batchStopRef.current) {
+          setBatchInfo(prev => prev ? { ...prev, countdown: null } : prev);
+        }
+      }
+    }
+
+    // Combine all batch results and clean up localStorage entries
+    for (let i = 0; i < batches.length; i++) {
+      localStorage.removeItem(`batch_${timestamp}_${i + 1}`);
+    }
+
+    setResults(allResults);
+    stopTimer();
+    setIsAnalyzing(false);
+    setIsBatchMode(false);
+    setBatchInfo(null);
+  };
+
+  const handleBatchAnalyze = () => {
+    const urls = urlsInput.split('\n').filter(url => url.trim());
+    if (urls.length === 0) {
+      Modal.warning({ title: 'Input Required', content: 'Please enter at least one URL.' });
+      return;
+    }
+    const batches = createBatches(urls);
+    Modal.confirm({
+      title: '🔄 Batch Analysis',
+      content: `${urls.length} URL${urls.length !== 1 ? 's' : ''} will be split into ${batches.length} batch${batches.length !== 1 ? 'es' : ''} of 45–55 URLs each, with a random 5–10 second delay between batches.`,
+      okText: 'Start Batch Analysis',
+      cancelText: 'Cancel',
+      onOk: () => runBatchAnalysis(batches, urls.length),
+    });
+  };
   
   const handleSaveScan = () => {
     const scanName = prompt("Enter a name for this scan:", new Date().toLocaleString());
@@ -401,29 +543,101 @@ function AnalyzerView({ currentUser, onLogout }) {
         {/* Action Bar */}
         {isAnalyzing ? (
           <div className="progress-section">
-            <div className="progress-header">
-              <Text className="progress-label">
-                Analyzing {progress} / {totalUrls} URLs…
-              </Text>
-              <Text className="progress-timer">⏱ {formatTime(elapsedTime)}</Text>
-            </div>
-            <Progress
-              className="progress-bar"
-              percent={Math.round((progress / totalUrls) * 100)}
-              strokeColor={{ from: '#06b6d4', to: '#3b82f6' }}
-              trailColor="rgba(255,255,255,0.04)"
-              showInfo={false}
-            />
-            <div style={{ marginTop: 12 }}>
-              <Button className="btn-stop" icon={<StopOutlined />} onClick={handleStopAnalysis}>
-                Stop Analysis
-              </Button>
-            </div>
+            {isBatchMode && batchInfo ? (
+              /* ── Batch mode progress dashboard ── */
+              <>
+                <div className="batch-status-header">
+                  <Text className="batch-status-text">
+                    <SyncOutlined spin style={{ marginRight: 6 }} />
+                    {batchInfo.statusText}
+                  </Text>
+                  <Text className="progress-timer">⏱ {formatTime(elapsedTime)}</Text>
+                </div>
+
+                <div className="batch-stats-grid">
+                  <div className="batch-stat">
+                    <span className="batch-stat-label">Batch</span>
+                    <span className="batch-stat-value">{batchInfo.currentBatch} / {batchInfo.totalBatches}</span>
+                  </div>
+                  <div className="batch-stat">
+                    <span className="batch-stat-label">Batch Progress</span>
+                    <span className="batch-stat-value">{batchInfo.completedInBatch} / {batchInfo.batchUrls}</span>
+                  </div>
+                  <div className="batch-stat">
+                    <span className="batch-stat-label">Total Done</span>
+                    <span className="batch-stat-value">{progress} / {totalUrls}</span>
+                  </div>
+                  <div className="batch-stat">
+                    <span className="batch-stat-label">Pending</span>
+                    <span className="batch-stat-value">{totalUrls - progress}</span>
+                  </div>
+                </div>
+
+                <Text className="progress-label" style={{ fontSize: 11, display: 'block', marginBottom: 6 }}>
+                  Overall Progress — {totalUrls > 0 ? Math.round((progress / totalUrls) * 100) : 0}%
+                </Text>
+                <Progress
+                  className="progress-bar"
+                  percent={totalUrls > 0 ? Math.round((progress / totalUrls) * 100) : 0}
+                  strokeColor={{ from: '#06b6d4', to: '#3b82f6' }}
+                  trailColor="rgba(255,255,255,0.04)"
+                  showInfo={false}
+                />
+
+                <Text className="progress-label" style={{ fontSize: 11, display: 'block', marginBottom: 6, marginTop: 12 }}>
+                  Current Batch — {batchInfo.completedInBatch} / {batchInfo.batchUrls}
+                </Text>
+                <Progress
+                  percent={batchInfo.batchUrls > 0 ? Math.round((batchInfo.completedInBatch / batchInfo.batchUrls) * 100) : 0}
+                  strokeColor="#818cf8"
+                  trailColor="rgba(255,255,255,0.04)"
+                  showInfo={false}
+                  size="small"
+                />
+
+                {batchInfo.countdown !== null && (
+                  <div className="batch-countdown">
+                    ⏳ Next batch starts in <span className="countdown-number">{batchInfo.countdown}s</span>
+                  </div>
+                )}
+
+                <div style={{ marginTop: 12 }}>
+                  <Button className="btn-stop" icon={<StopOutlined />} onClick={handleStopAnalysis}>
+                    Stop Analysis
+                  </Button>
+                </div>
+              </>
+            ) : (
+              /* ── Regular mode progress ── */
+              <>
+                <div className="progress-header">
+                  <Text className="progress-label">
+                    Analyzing {progress} / {totalUrls} URLs…
+                  </Text>
+                  <Text className="progress-timer">⏱ {formatTime(elapsedTime)}</Text>
+                </div>
+                <Progress
+                  className="progress-bar"
+                  percent={totalUrls > 0 ? Math.round((progress / totalUrls) * 100) : 0}
+                  strokeColor={{ from: '#06b6d4', to: '#3b82f6' }}
+                  trailColor="rgba(255,255,255,0.04)"
+                  showInfo={false}
+                />
+                <div style={{ marginTop: 12 }}>
+                  <Button className="btn-stop" icon={<StopOutlined />} onClick={handleStopAnalysis}>
+                    Stop Analysis
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="action-bar">
             <Button className="btn-analyze" type="primary" icon={<RocketOutlined />} onClick={handleAnalyze}>
               Analyze URLs
+            </Button>
+            <Button className="btn-batch" icon={<SyncOutlined />} onClick={handleBatchAnalyze}>
+              Batch Analysis
             </Button>
             <Select
               className="scan-select"
