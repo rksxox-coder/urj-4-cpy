@@ -434,6 +434,12 @@
 
 .url-textarea::placeholder { color: #334155 !important; }
 
+/* ---------- URL Count Indicator ---------- */
+.url-count-indicator {
+  margin-top: 8px;
+  padding: 4px 0;
+}
+
 /* ---------- Action Bar ---------- */
 .action-bar {
   display: flex;
