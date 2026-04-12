@@ -391,6 +391,14 @@ function AnalyzerView({ currentUser, onLogout }) {
       Modal.warning({ title: 'Input Required', content: 'Please enter at least one URL.' });
       return;
     }
+    const URL_LIMIT = currentUser.url_limit;
+    if (urls.length > URL_LIMIT) {
+      Modal.error({
+        title: 'URL Limit Exceeded',
+        content: `Your user role ('${currentUser.role}') allows a maximum of ${URL_LIMIT} URLs. You entered ${urls.length}.`,
+      });
+      return;
+    }
     const batches = createBatches(urls);
     Modal.confirm({
       title: '🔄 Batch Analysis',
@@ -539,6 +547,23 @@ function AnalyzerView({ currentUser, onLogout }) {
           placeholder={"https://example.com/short-link\nhttps://bit.ly/abc123\nhttps://t.co/xyz..."}
           disabled={isAnalyzing}
         />
+
+        {/* URL Count Indicator */}
+        {(() => {
+          const urlCount = urlsInput.split('\n').filter(url => url.trim()).length;
+          const limit = currentUser?.url_limit;
+          const isOver = limit && urlCount > limit;
+          return urlCount > 0 ? (
+            <div className="url-count-indicator">
+              <Text style={{ fontSize: 12, color: isOver ? '#f87171' : '#94a3b8' }}>
+                {isOver ? '⚠️ ' : ''}
+                {urlCount} URL{urlCount !== 1 ? 's' : ''} entered
+                {limit ? ` / ${limit} allowed` : ''}
+                {isOver ? ' — Limit exceeded!' : ''}
+              </Text>
+            </div>
+          ) : null;
+        })()}
 
         {/* Action Bar */}
         {isAnalyzing ? (
