@@ -1,0 +1,22 @@
+/* This file is for custom layout styles, as Ant Design handles the theme */
+
+.content-inner {
+  padding: 24px;
+  min-height: 280px;
+  border-radius: 8px;
+}
+
+.analysis-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.modal-container {
+  display: flex;
+  gap: 24px;
+}
+
+.modal-left {
+  flex: 1;
+}
