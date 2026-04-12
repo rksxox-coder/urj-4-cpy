@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import mermaid from 'mermaid';
 import { Layout, Input, Button, Table, Modal, Space, Select, Typography, Tooltip, Progress, ConfigProvider, theme, List, Descriptions, Collapse, Avatar, Card } from 'antd';
 import { DownloadOutlined, BarChartOutlined, StopOutlined, RocketOutlined, SaveOutlined, GithubOutlined, LogoutOutlined, LinkOutlined, ThunderboltOutlined, SyncOutlined } from '@ant-design/icons';
@@ -11,6 +11,17 @@ const { Title, Text } = Typography;
 const { Panel } = Collapse;
 
 mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+
+const truncate = (str, n) => (str && str.length > n) ? str.slice(0, n-1) + '…' : str;
+
+const formatTime = (totalSeconds) => {
+    const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+    const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+    const s = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${h}:${m}:${s}`;
+};
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 // Custom hook to handle session timeout due to inactivity
 function useIdleTimeout(onIdle, idleTime = 300000) { // Default timeout is 5 minutes
@@ -163,7 +174,7 @@ function AnalyzerView({ currentUser, onLogout }) {
   const batchTimestampRef = useRef(null);
 
 
-  const generateMermaidMarkup = (details) => {
+  const generateMermaidMarkup = useCallback((details) => {
     let markup = 'graph TD\n';
     const chain = details.redirectChain;
     if (!chain || chain.length === 0) {
@@ -176,7 +187,7 @@ function AnalyzerView({ currentUser, onLogout }) {
         if (index < chain.length - 1) markup += ` --> hop${index + 1};\n`;
     });
     return markup;
-  };
+  }, []);
   
 
   useEffect(() => {
@@ -195,9 +206,14 @@ function AnalyzerView({ currentUser, onLogout }) {
         }
       }
     }
-  }, [modalData]);
+  }, [modalData, generateMermaidMarkup]);
 
-  useEffect(() => { loadScanList(); }, []);
+  const loadScanList = useCallback(() => {
+    const scans = Object.keys(localStorage).filter(k => k.startsWith('scan_')).map(k => ({ value: k, label: k.replace('scan_', '').replace(/_/g, ' ') }));
+    setSavedScans(scans);
+  }, []);
+
+  useEffect(() => { loadScanList(); }, [loadScanList]);
 
   const startTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -207,11 +223,6 @@ function AnalyzerView({ currentUser, onLogout }) {
 
   const stopTimer = () => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-  };
-
-  const loadScanList = () => {
-    const scans = Object.keys(localStorage).filter(k => k.startsWith('scan_')).map(k => ({ value: k, label: k.replace('scan_', '').replace(/_/g, ' ') }));
-    setSavedScans(scans);
   };
 
  const handleAnalyze = () => {
@@ -891,16 +902,6 @@ const DetailsModal = ({ data, onClose }) => {
     );
 };
 
-const formatTime = (totalSeconds) => {
-    const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
-    const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
-    const s = (totalSeconds % 60).toString().padStart(2, '0');
-    return `${h}:${m}:${s}`;
-};
-
-const CURRENT_YEAR = new Date().getFullYear();
-
 function App() { return (<ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}><AppContent /></ConfigProvider>); }
-const truncate = (str, n) => (str && str.length > n) ? str.slice(0, n-1) + '…' : str;
 
 export default App;
