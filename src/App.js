@@ -383,7 +383,7 @@ function AnalyzerView({ currentUser, onLogout }) {
           <div>
             <Title className="url-input-title" level={5}>Analyze URLs</Title>
             <Text className="url-input-subtitle">
-              Enter one URL per line — up to {currentUser.url_limit} URLs allowed
+              Enter one URL per line — up to {currentUser?.url_limit ?? '?'} URLs allowed
             </Text>
           </div>
         </div>
@@ -562,7 +562,7 @@ function AppContent() {
       {/* ── Footer ── */}
       <Footer className="app-footer">
         <span className="footer-left">
-          © {new Date().getFullYear()} <b>URL Journey Analyzer</b> — Trace every redirect, understand the path.
+          © {CURRENT_YEAR} <b>URL Journey Analyzer</b> — Trace every redirect, understand the path.
         </span>
         <div className="footer-right">
           <a
@@ -664,6 +664,8 @@ const formatTime = (totalSeconds) => {
     const s = (totalSeconds % 60).toString().padStart(2, '0');
     return `${h}:${m}:${s}`;
 };
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 function App() { return (<ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}><AppContent /></ConfigProvider>); }
 const truncate = (str, n) => (str && str.length > n) ? str.slice(0, n-1) + '…' : str;
