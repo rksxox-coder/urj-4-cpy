@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import mermaid from 'mermaid';
-import { Layout, Input, Button, Table, Modal, Space, Select, Typography, Tag, Tooltip, Progress, ConfigProvider, theme, List, Descriptions, Collapse, Avatar } from 'antd';
-import { DownloadOutlined, BarChartOutlined, StopOutlined, RocketOutlined, SaveOutlined, GithubOutlined, LogoutOutlined } from '@ant-design/icons';
+import { Layout, Input, Button, Table, Modal, Space, Select, Typography, Tag, Tooltip, Progress, ConfigProvider, theme, List, Descriptions, Collapse, Avatar, Card } from 'antd';
+import { DownloadOutlined, BarChartOutlined, StopOutlined, RocketOutlined, SaveOutlined, GithubOutlined, LogoutOutlined, LinkOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import './App.css';
 
-const { Header, Content } = Layout;
+const { Header, Content, Footer } = Layout;
 const { TextArea } = Input;
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -83,15 +83,64 @@ const LoginForm = ({ onLoginSuccess }) => {
   };
 
   return (
-    <Layout style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Space direction="vertical" style={{ width: 350, padding: 24, background: '#141414', borderRadius: 8 }}>
-        <Title level={3} style={{ color: 'white', textAlign: 'center' }}>Access Analyzer</Title>
-        <Input placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} />
-        <Input.Password placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} onPressEnter={handleLogin} />
-        {error && <Text type="danger">{error}</Text>}
-        <Button type="primary" onClick={handleLogin} loading={loading} block>Login</Button>
-      </Space>
-    </Layout>
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-brand">
+          <div className="login-logo">🔗</div>
+          <Title className="login-brand-title">URL Journey Analyzer</Title>
+          <Text className="login-brand-subtitle">Trace every redirect. Understand the path.</Text>
+        </div>
+
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <div>
+            <Text className="login-field-label">Username</Text>
+            <Input
+              prefix={<span style={{ color: '#475569', marginRight: 4 }}>@</span>}
+              placeholder="Enter your username"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              onPressEnter={handleLogin}
+              size="large"
+            />
+          </div>
+
+          <div>
+            <Text className="login-field-label">Password</Text>
+            <Input.Password
+              placeholder="Enter your password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onPressEnter={handleLogin}
+              size="large"
+            />
+          </div>
+
+          {error && (
+            <div style={{
+              padding: '10px 14px',
+              background: 'rgba(239,68,68,0.1)',
+              border: '1px solid rgba(239,68,68,0.25)',
+              borderRadius: 8,
+              color: '#f87171',
+              fontSize: 13,
+            }}>
+              {error}
+            </div>
+          )}
+
+          <Button
+            className="login-btn"
+            type="primary"
+            onClick={handleLogin}
+            loading={loading}
+            icon={<RocketOutlined />}
+            style={{ marginTop: 8 }}
+          >
+            Sign In
+          </Button>
+        </Space>
+      </div>
+    </div>
   );
 };
 
@@ -252,54 +301,173 @@ function AnalyzerView({ currentUser, onLogout }) {
     XLSX.writeFile(workbook, "redirect_scan.xlsx");
   };
 
+  const getStatusTagClass = (status) => {
+    if (!status || status === 'N/A') return 'status-tag-unknown';
+    if (status === 'Error') return 'status-tag-error';
+    const s = parseInt(status);
+    if (s >= 500) return 'status-tag-5xx';
+    if (s >= 400) return 'status-tag-4xx';
+    if (s >= 300) return 'status-tag-3xx';
+    if (s >= 200) return 'status-tag-2xx';
+    return 'status-tag-unknown';
+  };
+
+  const getChainTagClass = (status) => {
+    if (status >= 400) return 'chain-tag-4xx';
+    if (status >= 300) return 'chain-tag-3xx';
+    return 'chain-tag-2xx';
+  };
+
   const columns = [
-    { title: 'Original URL', dataIndex: 'originalURL', render: url => <Tooltip title={url}>{truncate(url, 40)}</Tooltip> },
-    { title: 'Final URL', dataIndex: 'finalURL', render: url => <Tooltip title={url}>{truncate(url || 'N/A', 40)}</Tooltip> },
-    { title: 'Status', key: 'status', render: (_, record) => {
+    {
+      title: 'Original URL',
+      dataIndex: 'originalURL',
+      render: url => (
+        <Tooltip title={url}>
+          <span className="url-cell"><LinkOutlined style={{ color: '#475569', marginRight: 6 }} />{truncate(url, 40)}</span>
+        </Tooltip>
+      )
+    },
+    {
+      title: 'Final URL',
+      dataIndex: 'finalURL',
+      render: url => (
+        <Tooltip title={url}>
+          <span className="url-cell">{truncate(url || 'N/A', 40)}</span>
+        </Tooltip>
+      )
+    },
+    {
+      title: 'Status',
+      key: 'status',
+      width: 90,
+      render: (_, record) => {
         const finalStatus = record.error ? 'Error' : record.redirectChain?.slice(-1)[0]?.status || 'N/A';
-        const color = finalStatus >= 500 ? 'volcano' : finalStatus >= 400 ? 'red' : finalStatus >= 300 ? 'gold' : finalStatus >= 200 ? 'green' : 'grey';
-        return <Tag color={color}>{finalStatus}</Tag>;
-    }},
-    { title: 'Redirect Chain', key: 'chain', render: (_, record) => (
-        <Space size={[0, 8]} wrap>{record.redirectChain?.map((hop, i) => <Tag key={i} color="blue">{hop.status}</Tag>).slice(0, 5)}</Space>
-    )},
-    { title: 'Actions', key: 'actions', render: (_, record) => <Button icon={<BarChartOutlined />} onClick={() => setModalData(record)}>Details</Button> },
+        return <span className={`status-tag ${getStatusTagClass(finalStatus)}`}>{finalStatus}</span>;
+      }
+    },
+    {
+      title: 'Redirect Chain',
+      key: 'chain',
+      render: (_, record) => (
+        <Space size={4} wrap>
+          {record.redirectChain?.slice(0, 5).map((hop, i) => (
+            <span key={i} className={`chain-tag ${getChainTagClass(hop.status)}`}>{hop.status}</span>
+          ))}
+          {(record.redirectChain?.length || 0) > 5 && (
+            <span className="chain-tag" style={{ background: 'rgba(100,116,139,0.1)', borderColor: 'rgba(100,116,139,0.2)', color: '#64748b' }}>
+              +{record.redirectChain.length - 5}
+            </span>
+          )}
+        </Space>
+      )
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 100,
+      render: (_, record) => (
+        <Button className="details-btn" icon={<BarChartOutlined />} onClick={() => setModalData(record)}>
+          Details
+        </Button>
+      )
+    },
   ];
 
   return (
-    <Layout>
-
-      <Content style={{ padding: '50px' }}>
-        <div className="content-inner">
-          <Space direction="vertical" size="large" style={{width: '100%'}}>
-            <TextArea rows={8} value={urlsInput} onChange={(e) => setUrlsInput(e.target.value)} placeholder="Enter one or more URLs..." disabled={isAnalyzing} />
-             {isAnalyzing ? (
-              <div className="analysis-controls">
-                  <Progress percent={Math.round((progress / totalUrls) * 100)} />
-                  <Space>
-                    <Text>Elapsed Time: {formatTime(elapsedTime)}</Text>
-                    <Button type="primary" danger icon={<StopOutlined/>} onClick={handleStopAnalysis}>Stop Analysis</Button>
-                  </Space>
-              </div>
-            ) : (
-              <Space style={{width: '100%'}}>
-                <Button type="primary" icon={<RocketOutlined/>} onClick={handleAnalyze} block>Analyze URLs</Button>
-                <Select placeholder="Load a saved scan..." options={savedScans} onChange={handleLoadScan} style={{width: '250px'}} />
-              </Space>
-            )}
-            {results.length > 0 && !isAnalyzing && (
-              <Space>
-                <Text strong>Total Analysis Time: {formatTime(elapsedTime)}</Text>
-                <Button icon={<SaveOutlined/>} onClick={handleSaveScan}>Save Scan</Button>
-                <Button onClick={exportAsXlsx} icon={<DownloadOutlined />}>Export as Excel</Button>
-              </Space>
-            )}
-            <Table columns={columns} dataSource={results} rowKey="originalURL" />
-          </Space>
+    <div className="dashboard-page">
+      <Card className="section-card" bordered={false}>
+        {/* URL Input Header */}
+        <div className="url-input-header">
+          <ThunderboltOutlined style={{ color: '#06b6d4', fontSize: 18 }} />
+          <div>
+            <Title className="url-input-title" level={5}>Analyze URLs</Title>
+            <Text className="url-input-subtitle">
+              Enter one URL per line — up to {currentUser.url_limit} URLs allowed
+            </Text>
+          </div>
         </div>
-      </Content>
+
+        {/* URL Textarea */}
+        <TextArea
+          className="url-textarea"
+          rows={7}
+          value={urlsInput}
+          onChange={(e) => setUrlsInput(e.target.value)}
+          placeholder={"https://example.com/short-link\nhttps://bit.ly/abc123\nhttps://t.co/xyz..."}
+          disabled={isAnalyzing}
+        />
+
+        {/* Action Bar */}
+        {isAnalyzing ? (
+          <div className="progress-section">
+            <div className="progress-header">
+              <Text className="progress-label">
+                Analyzing {progress} / {totalUrls} URLs…
+              </Text>
+              <Text className="progress-timer">⏱ {formatTime(elapsedTime)}</Text>
+            </div>
+            <Progress
+              className="progress-bar"
+              percent={Math.round((progress / totalUrls) * 100)}
+              strokeColor={{ from: '#06b6d4', to: '#3b82f6' }}
+              trailColor="rgba(255,255,255,0.04)"
+              showInfo={false}
+            />
+            <div style={{ marginTop: 12 }}>
+              <Button className="btn-stop" icon={<StopOutlined />} onClick={handleStopAnalysis}>
+                Stop Analysis
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="action-bar">
+            <Button className="btn-analyze" type="primary" icon={<RocketOutlined />} onClick={handleAnalyze}>
+              Analyze URLs
+            </Button>
+            <Select
+              className="scan-select"
+              placeholder="Load a saved scan…"
+              options={savedScans}
+              onChange={handleLoadScan}
+            />
+          </div>
+        )}
+
+        {/* Results Bar */}
+        {results.length > 0 && !isAnalyzing && (
+          <div className="results-bar">
+            <Text className="results-count">
+              <b>{results.length}</b> {results.length === 1 ? 'result' : 'results'} analyzed
+            </Text>
+            <Text className="results-time">Total time: {formatTime(elapsedTime)}</Text>
+            <Space className="results-actions" size={8}>
+              <Button className="btn-secondary" icon={<SaveOutlined />} onClick={handleSaveScan}>
+                Save Scan
+              </Button>
+              <Button className="btn-secondary" icon={<DownloadOutlined />} onClick={exportAsXlsx}>
+                Export Excel
+              </Button>
+            </Space>
+          </div>
+        )}
+
+        {/* Results Table */}
+        {results.length > 0 && (
+          <div className="results-table-container">
+            <Table
+              className="results-table"
+              columns={columns}
+              dataSource={results}
+              rowKey="originalURL"
+              pagination={{ pageSize: 10, size: 'small' }}
+            />
+          </div>
+        )}
+      </Card>
+
       {modalData && <DetailsModal data={modalData} onClose={() => setModalData(null)} />}
-    </Layout>
+    </div>
   );
 }
 
@@ -330,57 +498,127 @@ function AppContent() {
     setCurrentUser(userWithActivity);
   };
 
+  const statusClass = `status-badge status-${serverStatus}`;
+
   return (
-    <Layout>
-      <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Title level={2} style={{ color: 'white', margin: 0 }}>🔗 URL Journey Analyzer</Title>
-        <Space align="center" size="middle">
-          <Tag color={serverStatus === 'online' ? 'green' : serverStatus === 'offline' ? 'red' : 'orange'}>
-            Backend Status: {serverStatus.charAt(0).toUpperCase() + serverStatus.slice(1)}
-          </Tag>
+    <Layout className="app-root">
+      {/* ── Header ── */}
+      <Header className="app-header">
+        <div className="header-brand">
+          <div className="header-logo-icon">🔗</div>
+          <Title className="header-title" level={4}>URL Journey Analyzer</Title>
+        </div>
+
+        <div className="header-actions">
+          {/* Backend status */}
+          <div className={statusClass}>
+            <span className="status-badge-dot" />
+            {serverStatus === 'checking' ? 'Connecting…' : serverStatus === 'online' ? 'Backend Online' : 'Backend Offline'}
+          </div>
+
+          {/* GitHub */}
           <Tooltip title="View on GitHub">
             <a href="https://github.com/bindrakesh" target="_blank" rel="noopener noreferrer">
-              <GithubOutlined style={{ color: 'white', fontSize: '24px', verticalAlign: 'middle' }} />
+              <Button className="header-icon-btn" type="text" icon={<GithubOutlined style={{ fontSize: 18 }} />} />
             </a>
           </Tooltip>
+
+          {/* User chip + logout */}
           {currentUser && (
             <>
-              <Tag>
-                Welcome, <b>{currentUser.username}</b> (Limit: {currentUser.url_limit})
-              </Tag>
+              <div className="user-chip">
+                <div className="user-avatar">
+                  {currentUser.username?.[0]?.toUpperCase() || 'U'}
+                </div>
+                <span>
+                  <b style={{ color: '#e2e8f0' }}>{currentUser.username}</b>
+                  <span style={{ color: '#475569', marginLeft: 6, fontSize: 11 }}>
+                    /{currentUser.url_limit} URLs
+                  </span>
+                </span>
+              </div>
               <Tooltip title="Logout">
-                <Button type="text" icon={<LogoutOutlined style={{ color: 'white', fontSize: '20px' }} />} onClick={handleLogout}/>
+                <Button
+                  className="header-icon-btn"
+                  type="text"
+                  icon={<LogoutOutlined style={{ fontSize: 16 }} />}
+                  onClick={handleLogout}
+                />
               </Tooltip>
             </>
           )}
-        </Space>
+        </div>
       </Header>
 
-      <Content style={{ padding: '50px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+      {/* ── Main Content ── */}
+      <Content className="app-main">
         {!currentUser ? (
           <LoginForm onLoginSuccess={handleLoginSuccess} />
         ) : (
           <AnalyzerView currentUser={currentUser} onLogout={handleLogout} />
         )}
       </Content>
+
+      {/* ── Footer ── */}
+      <Footer className="app-footer">
+        <span className="footer-left">
+          © {new Date().getFullYear()} <b>URL Journey Analyzer</b> — Trace every redirect, understand the path.
+        </span>
+        <div className="footer-right">
+          <a
+            href="https://github.com/bindrakesh"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="footer-link"
+          >
+            <GithubOutlined /> GitHub
+          </a>
+          <span className="footer-link" style={{ cursor: 'default' }}>
+            Built with React + Ant Design
+          </span>
+        </div>
+      </Footer>
     </Layout>
   );
 }
 
 const DetailsModal = ({ data, onClose }) => {
+    const getHopTagClass = (status) => {
+      if (status >= 400) return 'status-tag status-tag-4xx';
+      if (status >= 300) return 'status-tag status-tag-3xx';
+      return 'status-tag status-tag-2xx';
+    };
+
     const chainSummary = (
-        <Space size={[0, 8]} wrap>
-            {data.redirectChain?.map((hop, i) => <Tag key={i} color={hop.status >= 400 ? 'red' : hop.status >= 300 ? 'gold' : 'green'}>{hop.status}</Tag>)}
+        <Space size={4} wrap>
+            {data.redirectChain?.map((hop, i) => (
+              <span key={i} className={getHopTagClass(hop.status)}>{hop.status}</span>
+            ))}
         </Space>
     );
 
     return (
-        <Modal title="Analysis Details" open={!!data} onCancel={onClose} footer={null} width={900}>
-            <Descriptions bordered column={1} size="small" style={{ marginBottom: '1rem'}}>
+        <Modal
+          className="details-modal"
+          title={
+            <Space>
+              <BarChartOutlined style={{ color: '#06b6d4' }} />
+              <span>Analysis Details</span>
+            </Space>
+          }
+          open={!!data}
+          onCancel={onClose}
+          footer={null}
+          width={860}
+        >
+            <Descriptions bordered column={1} size="small" style={{ marginBottom: 20 }}>
                 <Descriptions.Item label="Original URL">{data.originalURL}</Descriptions.Item>
                 <Descriptions.Item label="Final URL">{data.finalURL || 'N/A'}</Descriptions.Item>
                 <Descriptions.Item label="Total Time">{(data.totalTime || 0).toFixed(2)} seconds</Descriptions.Item>
             </Descriptions>
+
+            <Text className="modal-section-title">Redirect Chain</Text>
+
             <Collapse defaultActiveKey={['1']}>
                 <Panel header={chainSummary} key="1">
                     <List
@@ -388,15 +626,34 @@ const DetailsModal = ({ data, onClose }) => {
                         renderItem={(item, index) => (
                             <List.Item>
                                 <List.Item.Meta
-                                    avatar={<Avatar style={{ backgroundColor: '#1677ff' }}>{index + 1}</Avatar>}
-                                    title={<><Tag color={item.status >= 400 ? 'red' : item.status >= 300 ? 'gold' : 'green'}>{item.status}</Tag> {item.url}</>}
-                                    description={<><b>Server:</b> {item.server || 'Unknown'} | <b>Time:</b> {(item.timestamp || 0).toFixed(2)}s</>}
+                                    avatar={
+                                      <Avatar className="hop-avatar" style={{ backgroundColor: 'transparent' }}>
+                                        {index + 1}
+                                      </Avatar>
+                                    }
+                                    title={
+                                      <Space size={8}>
+                                        <span className={getHopTagClass(item.status)}>{item.status}</span>
+                                        <span style={{ fontSize: 12, color: '#94a3b8', wordBreak: 'break-all' }}>{item.url}</span>
+                                      </Space>
+                                    }
+                                    description={
+                                      <span>
+                                        <b>Server:</b> {item.server || 'Unknown'}&nbsp;&nbsp;|&nbsp;&nbsp;
+                                        <b>Time:</b> {(item.timestamp || 0).toFixed(2)}s
+                                      </span>
+                                    }
                                 />
                             </List.Item>
                         )}
                     />
                 </Panel>
             </Collapse>
+
+            <div className="mermaid-container">
+              <Text className="modal-section-title" style={{ display: 'block', marginBottom: 16 }}>Flow Diagram</Text>
+              <div className="mermaid" />
+            </div>
         </Modal>
     );
 };
