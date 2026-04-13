@@ -287,6 +287,7 @@ function AnalyzerView({ currentUser, onLogout }) {
   const getValidUrlCount = (input) => input.split('\n').filter(url => url.trim()).length;
 
   const createBatches = (urls) => {
+    console.log('createBatches called with', urls.length, 'URLs');
     const batches = [];
     let i = 0;
     while (i < urls.length) {
@@ -299,6 +300,7 @@ function AnalyzerView({ currentUser, onLogout }) {
       batches.push(urls.slice(i, i + batchSize));
       i += batchSize;
     }
+    console.log('createBatches returning', batches.length, 'batches');
     return batches;
   };
 
@@ -329,6 +331,7 @@ function AnalyzerView({ currentUser, onLogout }) {
   };
 
   const runBatchAnalysis = async (batches, totalUrlCount) => {
+    console.log('=== runBatchAnalysis STARTED ===', 'batches:', batches.length, 'totalUrls:', totalUrlCount);
     const timestamp = Date.now();
     batchTimestampRef.current = timestamp;
     batchStopRef.current = false;
@@ -399,19 +402,36 @@ function AnalyzerView({ currentUser, onLogout }) {
   };
 
   const handleBatchAnalyze = () => {
-    const urls = urlsInput.split('\n').filter(url => url.trim());
-    if (urls.length === 0) {
-      Modal.warning({ title: 'Input Required', content: 'Please enter at least one URL.' });
-      return;
+    try {
+      console.log('=== handleBatchAnalyze CALLED ===');
+      const urls = urlsInput.split('\n').filter(url => url.trim());
+      console.log('URLs parsed, count:', urls.length);
+      if (urls.length === 0) {
+        console.log('No URLs, showing warning modal');
+        Modal.warning({ title: 'Input Required', content: 'Please enter at least one URL.' });
+        return;
+      }
+      console.log('Calling createBatches...');
+      const batches = createBatches(urls);
+      console.log('Batches created, count:', batches.length, 'sizes:', batches.map(b => b.length));
+      console.log('About to call Modal.confirm...');
+      Modal.confirm({
+        title: 'Batch Analysis',
+        content: `${urls.length} URLs will be split into ${batches.length} batches of 45-55 URLs each, with a random 5-10 second delay between batches.`,
+        okText: 'Start Batch Analysis',
+        cancelText: 'Cancel',
+        onOk: () => {
+          console.log('Modal.confirm onOk triggered, starting batch analysis');
+          runBatchAnalysis(batches, urls.length);
+        },
+      });
+      console.log('Modal.confirm called successfully');
+    } catch (err) {
+      console.error('=== handleBatchAnalyze ERROR ===', err);
+      console.error('Error message:', err.message);
+      console.error('Error stack:', err.stack);
+      Modal.error({ title: 'Batch Analysis Error', content: `Something went wrong: ${err.message}` });
     }
-    const batches = createBatches(urls);
-    Modal.confirm({
-      title: '🔄 Batch Analysis',
-      content: `${urls.length} URL${urls.length !== 1 ? 's' : ''} will be split into ${batches.length} batch${batches.length !== 1 ? 'es' : ''} of 45–55 URLs each, with a random 5–10 second delay between batches.`,
-      okText: 'Start Batch Analysis',
-      cancelText: 'Cancel',
-      onOk: () => runBatchAnalysis(batches, urls.length),
-    });
   };
   
   const handleSaveScan = () => {
